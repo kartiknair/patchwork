@@ -7,6 +7,8 @@ import {
   KnobHeadlessOutput,
   useKnobKeyboardControls,
 } from "react-knob-headless";
+import JSZip from "jszip";
+import { buildSF2 } from "./sf2";
 
 const KEY_TO_SEMITONE: Record<string, number> = {
   a: 0,
@@ -66,6 +68,33 @@ interface SynthParams {
 interface Voice {
   osc: OscillatorNode;
   ampEnv: GainNode;
+}
+
+function encodeWav(f32: Float32Array, sampleRate: number): ArrayBuffer {
+  // Normalize
+  let peak = 0
+  for (let i = 0; i < f32.length; i++) peak = Math.max(peak, Math.abs(f32[i]))
+  const scale = peak > 0.0001 ? 32767 / peak : 32767
+  const i16 = new Int16Array(f32.length)
+  for (let i = 0; i < f32.length; i++) i16[i] = Math.round(f32[i] * scale)
+
+  const dataBytes = i16.byteLength
+  const buf = new ArrayBuffer(44 + dataBytes)
+  const dv = new DataView(buf)
+  const enc = (s: string, off: number) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)) }
+
+  enc('RIFF', 0);  dv.setUint32(4,  36 + dataBytes, true)
+  enc('WAVE', 8);  enc('fmt ', 12)
+  dv.setUint32(16, 16, true)          // chunk size
+  dv.setUint16(20,  1, true)          // PCM
+  dv.setUint16(22,  1, true)          // mono
+  dv.setUint32(24, sampleRate, true)
+  dv.setUint32(28, sampleRate * 2, true) // byte rate
+  dv.setUint16(32,  2, true)          // block align
+  dv.setUint16(34, 16, true)          // bits per sample
+  enc('data', 36); dv.setUint32(40, dataBytes, true)
+  new Uint8Array(buf, 44).set(new Uint8Array(i16.buffer))
+  return buf
 }
 
 function Knob({
@@ -364,6 +393,103 @@ export default function Synth() {
     };
   }, []);
 
+  const [exportStatus, setExportStatus] = useState<string | null>(null)
+
+  const SAMPLE_RATE = 44100
+  const SUSTAIN_DUR = 2.0
+  const MIDI_NOTES = [12, 24, 36, 48, 60, 72, 84, 96, 108, 120] // C0–C9
+  const NOTE_NAMES_EXP = ['C','Cs','D','Ds','E','F','Fs','G','Gs','A','As','B']
+
+  const renderSamples = async (onProgress: (i: number, total: number) => void) => {
+    const p = paramsRef.current
+    const samples: { midi: number; name: string; data: Float32Array }[] = []
+
+    for (let i = 0; i < MIDI_NOTES.length; i++) {
+      const midi = MIDI_NOTES[i]
+      onProgress(i, MIDI_NOTES.length)
+      await new Promise<void>(r => setTimeout(r, 0))
+
+      const a = Math.max(p.ampA, 0.001), d = Math.max(p.ampD, 0.001), r = Math.max(p.ampR, 0.001)
+      const fa = Math.max(p.filtA, 0.001), fd = Math.max(p.filtD, 0.001), fr = Math.max(p.filtR, 0.001)
+      const noteOff = a + d + SUSTAIN_DUR
+      const duration = noteOff + r + 0.05
+
+      const ctx = new OfflineAudioContext(1, Math.ceil(duration * SAMPLE_RATE), SAMPLE_RATE)
+      const osc = ctx.createOscillator()
+      osc.type = p.waveform
+      osc.frequency.value = midiToFreq(midi)
+
+      const ampEnv = ctx.createGain()
+      ampEnv.gain.setValueAtTime(0, 0)
+      ampEnv.gain.linearRampToValueAtTime(1, a)
+      ampEnv.gain.linearRampToValueAtTime(p.ampS, a + d)
+      ampEnv.gain.setValueAtTime(p.ampS, noteOff)
+      ampEnv.gain.linearRampToValueAtTime(0, noteOff + r)
+
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.setValueAtTime(p.filterCutoff, 0)
+      filter.frequency.linearRampToValueAtTime(p.filterCutoff + p.filtEnvAmt, fa)
+      filter.frequency.linearRampToValueAtTime(p.filterCutoff + p.filtEnvAmt * p.filtS, fa + fd)
+      filter.frequency.setValueAtTime(p.filterCutoff + p.filtEnvAmt * p.filtS, noteOff)
+      filter.frequency.linearRampToValueAtTime(p.filterCutoff, noteOff + fr)
+      filter.Q.value = p.filterRes
+
+      const master = ctx.createGain()
+      master.gain.value = p.volume * 0.15
+
+      osc.connect(ampEnv); ampEnv.connect(filter); filter.connect(master); master.connect(ctx.destination)
+      osc.start(0); osc.stop(duration)
+
+      const rendered = await ctx.startRendering()
+      const oct = Math.floor(midi / 12) - 1
+      samples.push({ midi, name: NOTE_NAMES_EXP[midi % 12] + oct, data: rendered.getChannelData(0) })
+    }
+    return samples
+  }
+
+  const exportSFZ = async () => {
+    const zip = new JSZip()
+    const samples = await renderSamples((i, total) => setExportStatus(`Rendering ${i + 1}/${total}…`))
+
+    setExportStatus('Building SFZ…')
+    await new Promise<void>(r => setTimeout(r, 0))
+
+    const sfzLines = ['// Patchwork Synth export', '']
+    for (let i = 0; i < samples.length; i++) {
+      const { midi, name, data } = samples[i]
+      const lo = i === 0 ? 0 : Math.floor((samples[i - 1].midi + midi) / 2) + 1
+      const hi = i === samples.length - 1 ? 127 : Math.floor((midi + samples[i + 1].midi) / 2)
+      zip.file(name + '.wav', encodeWav(data, SAMPLE_RATE))
+      sfzLines.push('<region>', `sample=${name}.wav`, `pitch_keycenter=${midi}`, `lokey=${lo}`, `hikey=${hi}`, '')
+    }
+    zip.file('patch.sfz', sfzLines.join('\n'))
+
+    setExportStatus('Compressing…')
+    await new Promise<void>(r => setTimeout(r, 0))
+    const blob = await zip.generateAsync({ type: 'blob' })
+    const url = URL.createObjectURL(blob)
+    const a_el = document.createElement('a')
+    a_el.href = url; a_el.download = 'patchwork.zip'; a_el.click()
+    URL.revokeObjectURL(url)
+    setExportStatus(null)
+  }
+
+  const exportSF2 = async () => {
+    const samples = await renderSamples((i, total) => setExportStatus(`Rendering ${i + 1}/${total}…`))
+
+    setExportStatus('Building SF2…')
+    await new Promise<void>(r => setTimeout(r, 0))
+
+    const sf2 = buildSF2(samples.map(s => ({ midi: s.midi, data: s.data })), SAMPLE_RATE, 'Patchwork Synth')
+    const blob = new Blob([sf2], { type: 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a_el = document.createElement('a')
+    a_el.href = url; a_el.download = 'patchwork.sf2'; a_el.click()
+    URL.revokeObjectURL(url)
+    setExportStatus(null)
+  }
+
   const set = (key: keyof SynthParams) => (v: number) =>
     setParams((p) => ({ ...p, [key]: v }));
 
@@ -619,6 +745,17 @@ export default function Synth() {
             );
           })}
         </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Export</legend>
+        {exportStatus
+          ? <span>{exportStatus}</span>
+          : <>
+              <button onClick={exportSFZ} style={{ marginRight: '0.5rem' }}>SFZ + WAV (.zip)</button>
+              <button onClick={exportSF2}>SF2</button>
+            </>
+        }
       </fieldset>
     </div>
   );
