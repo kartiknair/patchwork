@@ -45,7 +45,7 @@ function midiToFreq(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
-interface SynthParams {
+export interface SynthParams {
   waveform: OscillatorType;
   filterCutoff: number;
   filterRes: number;
@@ -65,36 +65,60 @@ interface SynthParams {
   octave: number;
 }
 
+export const DEFAULT_PARAMS: SynthParams = {
+  waveform: "sawtooth",
+  filterCutoff: 2000,
+  filterRes: 1,
+  volume: 0.7,
+  ampA: 0.01,
+  ampD: 0.2,
+  ampS: 0.7,
+  ampR: 0.3,
+  filtA: 0.01,
+  filtD: 0.3,
+  filtS: 0.5,
+  filtR: 0.5,
+  filtEnvAmt: 3000,
+  lfoRate: 5,
+  lfoDepth: 20,
+  lfoTarget: "none",
+  octave: 4,
+};
+
 interface Voice {
   osc: OscillatorNode;
   ampEnv: GainNode;
 }
 
 function encodeWav(f32: Float32Array, sampleRate: number): ArrayBuffer {
-  // Normalize
-  let peak = 0
-  for (let i = 0; i < f32.length; i++) peak = Math.max(peak, Math.abs(f32[i]))
-  const scale = peak > 0.0001 ? 32767 / peak : 32767
-  const i16 = new Int16Array(f32.length)
-  for (let i = 0; i < f32.length; i++) i16[i] = Math.round(f32[i] * scale)
+  let peak = 0;
+  for (let i = 0; i < f32.length; i++) peak = Math.max(peak, Math.abs(f32[i]));
+  const scale = peak > 0.0001 ? 32767 / peak : 32767;
+  const i16 = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++) i16[i] = Math.round(f32[i] * scale);
 
-  const dataBytes = i16.byteLength
-  const buf = new ArrayBuffer(44 + dataBytes)
-  const dv = new DataView(buf)
-  const enc = (s: string, off: number) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)) }
+  const dataBytes = i16.byteLength;
+  const buf = new ArrayBuffer(44 + dataBytes);
+  const dv = new DataView(buf);
+  const enc = (s: string, off: number) => {
+    for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i));
+  };
 
-  enc('RIFF', 0);  dv.setUint32(4,  36 + dataBytes, true)
-  enc('WAVE', 8);  enc('fmt ', 12)
-  dv.setUint32(16, 16, true)          // chunk size
-  dv.setUint16(20,  1, true)          // PCM
-  dv.setUint16(22,  1, true)          // mono
-  dv.setUint32(24, sampleRate, true)
-  dv.setUint32(28, sampleRate * 2, true) // byte rate
-  dv.setUint16(32,  2, true)          // block align
-  dv.setUint16(34, 16, true)          // bits per sample
-  enc('data', 36); dv.setUint32(40, dataBytes, true)
-  new Uint8Array(buf, 44).set(new Uint8Array(i16.buffer))
-  return buf
+  enc("RIFF", 0);
+  dv.setUint32(4, 36 + dataBytes, true);
+  enc("WAVE", 8);
+  enc("fmt ", 12);
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);
+  dv.setUint16(22, 1, true);
+  dv.setUint32(24, sampleRate, true);
+  dv.setUint32(28, sampleRate * 2, true);
+  dv.setUint16(32, 2, true);
+  dv.setUint16(34, 16, true);
+  enc("data", 36);
+  dv.setUint32(40, dataBytes, true);
+  new Uint8Array(buf, 44).set(new Uint8Array(i16.buffer));
+  return buf;
 }
 
 function Knob({
@@ -161,27 +185,13 @@ function Knob({
   );
 }
 
-export default function Synth() {
-  const [params, setParams] = useState<SynthParams>({
-    waveform: "sawtooth",
-    filterCutoff: 2000,
-    filterRes: 1,
-    volume: 0.7,
-    ampA: 0.01,
-    ampD: 0.2,
-    ampS: 0.7,
-    ampR: 0.3,
-    filtA: 0.01,
-    filtD: 0.3,
-    filtS: 0.5,
-    filtR: 0.5,
-    filtEnvAmt: 3000,
-    lfoRate: 5,
-    lfoDepth: 20,
-    lfoTarget: "none",
-    octave: 4,
-  });
-
+export function SynthInner({
+  params,
+  setParams,
+}: {
+  params: SynthParams;
+  setParams: React.Dispatch<React.SetStateAction<SynthParams>>;
+}) {
   const ctxRef = useRef<AudioContext | null>(null);
   const filterRef = useRef<BiquadFilterNode | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
@@ -351,6 +361,11 @@ export default function Synth() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
       const key = e.key.toLowerCase();
 
       if (key === "z") {
@@ -385,7 +400,7 @@ export default function Synth() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [initAudio, noteOn, noteOff]);
+  }, [initAudio, noteOn, noteOff, setParams]);
 
   useEffect(() => {
     return () => {
@@ -393,102 +408,164 @@ export default function Synth() {
     };
   }, []);
 
-  const [exportStatus, setExportStatus] = useState<string | null>(null)
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
 
-  const SAMPLE_RATE = 44100
-  const SUSTAIN_DUR = 2.0
-  const MIDI_NOTES = [12, 24, 36, 48, 60, 72, 84, 96, 108, 120] // C0–C9
-  const NOTE_NAMES_EXP = ['C','Cs','D','Ds','E','F','Fs','G','Gs','A','As','B']
+  const SAMPLE_RATE = 44100;
+  const SUSTAIN_DUR = 2.0;
+  const MIDI_NOTES = [12, 24, 36, 48, 60, 72, 84, 96, 108, 120];
+  const NOTE_NAMES_EXP = [
+    "C",
+    "Cs",
+    "D",
+    "Ds",
+    "E",
+    "F",
+    "Fs",
+    "G",
+    "Gs",
+    "A",
+    "As",
+    "B",
+  ];
 
-  const renderSamples = async (onProgress: (i: number, total: number) => void) => {
-    const p = paramsRef.current
-    const samples: { midi: number; name: string; data: Float32Array }[] = []
+  const renderSamples = async (
+    onProgress: (i: number, total: number) => void,
+  ) => {
+    const p = paramsRef.current;
+    const samples: { midi: number; name: string; data: Float32Array }[] = [];
 
     for (let i = 0; i < MIDI_NOTES.length; i++) {
-      const midi = MIDI_NOTES[i]
-      onProgress(i, MIDI_NOTES.length)
-      await new Promise<void>(r => setTimeout(r, 0))
+      const midi = MIDI_NOTES[i];
+      onProgress(i, MIDI_NOTES.length);
+      await new Promise<void>((r) => setTimeout(r, 0));
 
-      const a = Math.max(p.ampA, 0.001), d = Math.max(p.ampD, 0.001), r = Math.max(p.ampR, 0.001)
-      const fa = Math.max(p.filtA, 0.001), fd = Math.max(p.filtD, 0.001), fr = Math.max(p.filtR, 0.001)
-      const noteOff = a + d + SUSTAIN_DUR
-      const duration = noteOff + r + 0.05
+      const a = Math.max(p.ampA, 0.001),
+        d = Math.max(p.ampD, 0.001),
+        r = Math.max(p.ampR, 0.001);
+      const fa = Math.max(p.filtA, 0.001),
+        fd = Math.max(p.filtD, 0.001),
+        fr = Math.max(p.filtR, 0.001);
+      const noteOff = a + d + SUSTAIN_DUR;
+      const duration = noteOff + r + 0.05;
 
-      const ctx = new OfflineAudioContext(1, Math.ceil(duration * SAMPLE_RATE), SAMPLE_RATE)
-      const osc = ctx.createOscillator()
-      osc.type = p.waveform
-      osc.frequency.value = midiToFreq(midi)
+      const ctx = new OfflineAudioContext(
+        1,
+        Math.ceil(duration * SAMPLE_RATE),
+        SAMPLE_RATE,
+      );
+      const osc = ctx.createOscillator();
+      osc.type = p.waveform;
+      osc.frequency.value = midiToFreq(midi);
 
-      const ampEnv = ctx.createGain()
-      ampEnv.gain.setValueAtTime(0, 0)
-      ampEnv.gain.linearRampToValueAtTime(1, a)
-      ampEnv.gain.linearRampToValueAtTime(p.ampS, a + d)
-      ampEnv.gain.setValueAtTime(p.ampS, noteOff)
-      ampEnv.gain.linearRampToValueAtTime(0, noteOff + r)
+      const ampEnv = ctx.createGain();
+      ampEnv.gain.setValueAtTime(0, 0);
+      ampEnv.gain.linearRampToValueAtTime(1, a);
+      ampEnv.gain.linearRampToValueAtTime(p.ampS, a + d);
+      ampEnv.gain.setValueAtTime(p.ampS, noteOff);
+      ampEnv.gain.linearRampToValueAtTime(0, noteOff + r);
 
-      const filter = ctx.createBiquadFilter()
-      filter.type = 'lowpass'
-      filter.frequency.setValueAtTime(p.filterCutoff, 0)
-      filter.frequency.linearRampToValueAtTime(p.filterCutoff + p.filtEnvAmt, fa)
-      filter.frequency.linearRampToValueAtTime(p.filterCutoff + p.filtEnvAmt * p.filtS, fa + fd)
-      filter.frequency.setValueAtTime(p.filterCutoff + p.filtEnvAmt * p.filtS, noteOff)
-      filter.frequency.linearRampToValueAtTime(p.filterCutoff, noteOff + fr)
-      filter.Q.value = p.filterRes
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(p.filterCutoff, 0);
+      filter.frequency.linearRampToValueAtTime(
+        p.filterCutoff + p.filtEnvAmt,
+        fa,
+      );
+      filter.frequency.linearRampToValueAtTime(
+        p.filterCutoff + p.filtEnvAmt * p.filtS,
+        fa + fd,
+      );
+      filter.frequency.setValueAtTime(
+        p.filterCutoff + p.filtEnvAmt * p.filtS,
+        noteOff,
+      );
+      filter.frequency.linearRampToValueAtTime(p.filterCutoff, noteOff + fr);
+      filter.Q.value = p.filterRes;
 
-      const master = ctx.createGain()
-      master.gain.value = p.volume * 0.15
+      const master = ctx.createGain();
+      master.gain.value = p.volume * 0.15;
 
-      osc.connect(ampEnv); ampEnv.connect(filter); filter.connect(master); master.connect(ctx.destination)
-      osc.start(0); osc.stop(duration)
+      osc.connect(ampEnv);
+      ampEnv.connect(filter);
+      filter.connect(master);
+      master.connect(ctx.destination);
+      osc.start(0);
+      osc.stop(duration);
 
-      const rendered = await ctx.startRendering()
-      const oct = Math.floor(midi / 12) - 1
-      samples.push({ midi, name: NOTE_NAMES_EXP[midi % 12] + oct, data: rendered.getChannelData(0) })
+      const rendered = await ctx.startRendering();
+      const oct = Math.floor(midi / 12) - 1;
+      samples.push({
+        midi,
+        name: NOTE_NAMES_EXP[midi % 12] + oct,
+        data: rendered.getChannelData(0),
+      });
     }
-    return samples
-  }
+    return samples;
+  };
 
   const exportSFZ = async () => {
-    const zip = new JSZip()
-    const samples = await renderSamples((i, total) => setExportStatus(`Rendering ${i + 1}/${total}…`))
+    const zip = new JSZip();
+    const samples = await renderSamples((i, total) =>
+      setExportStatus(`Rendering ${i + 1}/${total}…`),
+    );
 
-    setExportStatus('Building SFZ…')
-    await new Promise<void>(r => setTimeout(r, 0))
+    setExportStatus("Building SFZ…");
+    await new Promise<void>((r) => setTimeout(r, 0));
 
-    const sfzLines = ['// Patchwork Synth export', '']
+    const sfzLines = ["// Patchwork Synth export", ""];
     for (let i = 0; i < samples.length; i++) {
-      const { midi, name, data } = samples[i]
-      const lo = i === 0 ? 0 : Math.floor((samples[i - 1].midi + midi) / 2) + 1
-      const hi = i === samples.length - 1 ? 127 : Math.floor((midi + samples[i + 1].midi) / 2)
-      zip.file(name + '.wav', encodeWav(data, SAMPLE_RATE))
-      sfzLines.push('<region>', `sample=${name}.wav`, `pitch_keycenter=${midi}`, `lokey=${lo}`, `hikey=${hi}`, '')
+      const { midi, name, data } = samples[i];
+      const lo = i === 0 ? 0 : Math.floor((samples[i - 1].midi + midi) / 2) + 1;
+      const hi =
+        i === samples.length - 1
+          ? 127
+          : Math.floor((midi + samples[i + 1].midi) / 2);
+      zip.file(name + ".wav", encodeWav(data, SAMPLE_RATE));
+      sfzLines.push(
+        "<region>",
+        `sample=${name}.wav`,
+        `pitch_keycenter=${midi}`,
+        `lokey=${lo}`,
+        `hikey=${hi}`,
+        "",
+      );
     }
-    zip.file('patch.sfz', sfzLines.join('\n'))
+    zip.file("patch.sfz", sfzLines.join("\n"));
 
-    setExportStatus('Compressing…')
-    await new Promise<void>(r => setTimeout(r, 0))
-    const blob = await zip.generateAsync({ type: 'blob' })
-    const url = URL.createObjectURL(blob)
-    const a_el = document.createElement('a')
-    a_el.href = url; a_el.download = 'patchwork.zip'; a_el.click()
-    URL.revokeObjectURL(url)
-    setExportStatus(null)
-  }
+    setExportStatus("Compressing…");
+    await new Promise<void>((r) => setTimeout(r, 0));
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a_el = document.createElement("a");
+    a_el.href = url;
+    a_el.download = "patchwork.zip";
+    a_el.click();
+    URL.revokeObjectURL(url);
+    setExportStatus(null);
+  };
 
   const exportSF2 = async () => {
-    const samples = await renderSamples((i, total) => setExportStatus(`Rendering ${i + 1}/${total}…`))
+    const samples = await renderSamples((i, total) =>
+      setExportStatus(`Rendering ${i + 1}/${total}…`),
+    );
 
-    setExportStatus('Building SF2…')
-    await new Promise<void>(r => setTimeout(r, 0))
+    setExportStatus("Building SF2…");
+    await new Promise<void>((r) => setTimeout(r, 0));
 
-    const sf2 = buildSF2(samples.map(s => ({ midi: s.midi, data: s.data })), SAMPLE_RATE, 'Patchwork Synth')
-    const blob = new Blob([sf2], { type: 'application/octet-stream' })
-    const url = URL.createObjectURL(blob)
-    const a_el = document.createElement('a')
-    a_el.href = url; a_el.download = 'patchwork.sf2'; a_el.click()
-    URL.revokeObjectURL(url)
-    setExportStatus(null)
-  }
+    const sf2 = buildSF2(
+      samples.map((s) => ({ midi: s.midi, data: s.data })),
+      SAMPLE_RATE,
+      "Patchwork Synth",
+    );
+    const blob = new Blob([sf2], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const a_el = document.createElement("a");
+    a_el.href = url;
+    a_el.download = "patchwork.sf2";
+    a_el.click();
+    URL.revokeObjectURL(url);
+    setExportStatus(null);
+  };
 
   const set = (key: keyof SynthParams) => (v: number) =>
     setParams((p) => ({ ...p, [key]: v }));
@@ -498,7 +575,7 @@ export default function Synth() {
   return (
     <div style={{ padding: "1rem", fontFamily: "monospace" }}>
       <h1>Patchwork Synth</h1>
-      <p>
+      <p className="mb-8">
         Press keyboard keys to play. <strong>Z</strong> / <strong>X</strong>{" "}
         shift octave. Current octave: <strong>{params.octave}</strong>
       </p>
@@ -749,14 +826,22 @@ export default function Synth() {
 
       <fieldset>
         <legend>Export</legend>
-        {exportStatus
-          ? <span>{exportStatus}</span>
-          : <>
-              <button onClick={exportSFZ} style={{ marginRight: '0.5rem' }}>SFZ + WAV (.zip)</button>
-              <button onClick={exportSF2}>SF2</button>
-            </>
-        }
+        {exportStatus ? (
+          <span>{exportStatus}</span>
+        ) : (
+          <>
+            <button onClick={exportSFZ} style={{ marginRight: "0.5rem" }}>
+              SFZ + WAV (.zip)
+            </button>
+            <button onClick={exportSF2}>SF2</button>
+          </>
+        )}
       </fieldset>
     </div>
   );
+}
+
+export default function Synth() {
+  const [params, setParams] = useState<SynthParams>(DEFAULT_PARAMS);
+  return <SynthInner params={params} setParams={setParams} />;
 }
