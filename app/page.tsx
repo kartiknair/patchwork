@@ -19,7 +19,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-7 py-4.5 border-b border-hair">
+      <div className="flex items-center justify-between px-4 md:px-7 py-3 md:py-4.5 border-b border-hair">
         <div className="flex items-baseline gap-3">
           <span
             className="w-3.5 h-3.5 rounded-full inline-block"

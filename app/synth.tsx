@@ -1301,9 +1301,9 @@ export function SynthInner({
     C_LFO = "#ff8a72";
 
   return (
-    <div className="max-w-500 mx-auto px-7 pt-4.5 pb-7 grid grid-cols-12 gap-3.5">
+    <div className="max-w-500 md:w-[80%] w-full mx-auto px-4 md:px-7 pt-4.5 pb-7 grid grid-cols-1 md:grid-cols-12 gap-3.5">
       {/* Oscillator */}
-      <div className="col-span-4">
+      <div className="md:col-span-4">
         <Panel
           title="Oscillator"
           index="01 / OSC"
@@ -1350,7 +1350,7 @@ export function SynthInner({
       </div>
 
       {/* Filter */}
-      <div className="col-span-4">
+      <div className="md:col-span-4">
         <Panel
           title="Filter"
           index="02 / FLT"
@@ -1405,7 +1405,7 @@ export function SynthInner({
       </div>
 
       {/* Amp Envelope */}
-      <div className="col-span-4">
+      <div className="md:col-span-4">
         <Panel
           title="Amp Envelope"
           index="03 / VCA"
@@ -1476,7 +1476,7 @@ export function SynthInner({
       </div>
 
       {/* Filter Envelope */}
-      <div className="col-span-4">
+      <div className="md:col-span-4">
         <Panel
           title="Filter Envelope"
           index="04 / VCF·ENV"
@@ -1547,7 +1547,7 @@ export function SynthInner({
       </div>
 
       {/* LFO */}
-      <div className="col-span-8">
+      <div className="md:col-span-8">
         <Panel
           title="LFO"
           index="05 / LFO"
@@ -1625,7 +1625,7 @@ export function SynthInner({
       </div>
 
       {/* Keyboard */}
-      <div className="col-span-12">
+      <div className="md:col-span-12">
         <Panel
           title="Keyboard"
           index="06 / KBD"
@@ -1665,7 +1665,7 @@ export function SynthInner({
       </div>
 
       {/* Export */}
-      <div className="col-span-12 flex gap-2 items-center pt-1">
+      <div className="md:col-span-12 flex gap-2 items-center pt-1">
         {exportStatus ? (
           <span className="text-[10px] tracking-[0.14em] uppercase text-ink-2">
             {exportStatus}

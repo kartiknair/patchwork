@@ -250,7 +250,7 @@ function CollabSynthInner({
   return (
     <div className="min-h-screen flex flex-col gap-15">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-7 py-4.5 border-b border-hair">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between px-4 md:px-7 py-3 md:py-4.5 border-b border-hair">
         <div className="flex items-baseline gap-2.5">
           <span
             className="w-3.5 h-3.5 rounded-full inline-block"
@@ -268,7 +268,7 @@ function CollabSynthInner({
           </span>
         </div>
 
-        <div className="flex items-center gap-3.5 text-ink-3 text-[10px] tracking-[0.14em] uppercase">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3.5 text-ink-3 text-[10px] tracking-[0.14em] uppercase">
           <span>Room</span>
           <span className="text-ink border border-hair px-2 py-1 rounded bg-panel-2">
             {roomId}
@@ -344,7 +344,7 @@ function CollabSynthInner({
             ))}
           </div>
 
-          <span className="text-ink-4">
+          <span className="hidden md:inline text-ink-4">
             Press <kbd className="border border-hair px-1 rounded">/</kbd> to
             chat
           </span>
