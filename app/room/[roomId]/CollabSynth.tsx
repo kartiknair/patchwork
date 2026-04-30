@@ -15,14 +15,14 @@ import { SynthInner, SynthParams, DEFAULT_PARAMS } from "../../synth";
 const MAX_USERS = 8;
 
 const COLORS = [
-  "#ff4444",
-  "#ff9900",
-  "#ffdd00",
-  "#44cc55",
-  "#4488ff",
-  "#cc44ff",
-  "#ff44aa",
-  "#22ddcc",
+  "#ff7ab8",
+  "#7adfff",
+  "#b8ff7a",
+  "#ffd47a",
+  "#ff8a72",
+  "#c79bff",
+  "#7ad3e0",
+  "#82e6b0",
 ];
 
 const NAMES = [
@@ -88,12 +88,18 @@ export default function CollabSynth({ roomId }: { roomId: string }) {
 
   if (!process.env.NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY?.startsWith("pk_")) {
     return (
-      <div style={{ padding: "2rem", fontFamily: "monospace" }}>
-        <p>
-          <strong>Liveblocks not configured.</strong> Add your public key to{" "}
-          <code>.env.local</code>:
+      <div className="p-8 font-mono text-ink-2 text-xs">
+        <p className="mb-3">
+          <span className="text-ink font-semibold">
+            Liveblocks not configured.
+          </span>{" "}
+          Add your public key to{" "}
+          <code className="bg-panel-2 px-1 py-0.5 rounded text-ink border border-hair">
+            .env.local
+          </code>
+          :
         </p>
-        <pre style={{ background: "#f4f4f4", padding: "0.5rem" }}>
+        <pre className="bg-panel-2 border border-hair rounded p-3 text-ink-2 mb-3">
           NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY=pk_...
         </pre>
         <p>Get a free key at liveblocks.io, then restart the dev server.</p>
@@ -135,12 +141,10 @@ function CollabSynthInner({
 
   const [chatInput, setChatInput] = useState<string | null>(null);
   const chatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const [name, setName] = useState(initialName);
   const [editingName, setEditingName] = useState(false);
   const [color, setColor] = useState(COLORS[0]);
 
-  // Assign color by connectionId so successive joiners cycle through the palette
   useEffect(() => {
     if (self?.connectionId === undefined) return;
     const c = COLORS[self.connectionId % COLORS.length];
@@ -148,13 +152,11 @@ function CollabSynthInner({
     updateMyPresence({ color: c });
   }, [self?.connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Set up Yjs sync
   useEffect(() => {
     const provider = getYjsProviderForRoom(room);
     const yDoc = provider.getYDoc();
     const yMap = yDoc.getMap<unknown>("synthParams");
     yMapRef.current = yMap;
-
     const observer = (event: Y.YMapEvent<unknown>) => {
       if (event.transaction.origin === LOCAL_ORIGIN) return;
       setParams((prev) => {
@@ -167,26 +169,20 @@ function CollabSynthInner({
         return prev;
       });
     };
-
     yMap.observe(observer);
-    // Apply any pre-existing state already in the room
     const initial = readFromMap(yMap);
     if (Object.keys(initial).length > 0)
       setParams((prev) => ({ ...prev, ...initial }));
-
     return () => yMap.unobserve(observer);
   }, [room]);
 
-  // Push local param changes to Yjs
   useEffect(() => {
     if (yMapRef.current) writeToMap(yMapRef.current, params);
   }, [params]);
 
-  // Cursor tracking
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: MouseEvent) =>
       updateMyPresence({ cursor: { x: e.clientX, y: e.clientY } });
-    };
     const onLeave = () => updateMyPresence({ cursor: null });
     window.addEventListener("mousemove", onMove);
     document.documentElement.addEventListener("mouseleave", onLeave);
@@ -196,7 +192,6 @@ function CollabSynthInner({
     };
   }, [updateMyPresence]);
 
-  // Slash chat keyboard handler
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (
@@ -237,108 +232,136 @@ function CollabSynthInner({
     if (!msg) return;
     updateMyPresence({ chat: msg });
     if (chatTimeoutRef.current) clearTimeout(chatTimeoutRef.current);
-    chatTimeoutRef.current = setTimeout(() => {
-      updateMyPresence({ chat: null });
-    }, 5000);
+    chatTimeoutRef.current = setTimeout(
+      () => updateMyPresence({ chat: null }),
+      5000,
+    );
   }, [chatInput, updateMyPresence]);
 
   if (others.length >= MAX_USERS) {
     return (
-      <div style={{ padding: "2rem", fontFamily: "monospace" }}>
-        Room <strong>{roomId}</strong> is full ({MAX_USERS} users max).
+      <div className="p-8 font-mono text-ink-2 text-xs">
+        Room <strong className="text-ink">{roomId}</strong> is full ({MAX_USERS}{" "}
+        users max).
       </div>
     );
   }
 
   return (
-    <div>
-      <div
-        style={{
-          padding: "0.5rem 1rem",
-          fontFamily: "monospace",
-          fontSize: "0.8rem",
-          borderBottom: "1px solid #ddd",
-          display: "flex",
-          gap: "1rem",
-          alignItems: "center",
-        }}
-      >
-        <span>
-          Room: <strong>{roomId}</strong>
-        </span>
-        <span>
-          {others.length + 1} user{others.length !== 0 ? "s" : ""}
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-          You:{" "}
-          {editingName ? (
-            <input
-              autoFocus
-              defaultValue={name}
+    <div className="min-h-screen flex flex-col gap-15">
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-7 py-4.5 border-b border-hair">
+        <div className="flex items-baseline gap-2.5">
+          <span
+            className="w-3.5 h-3.5 rounded-full inline-block"
+            style={{
+              background:
+                "radial-gradient(circle at 35% 35%, oklch(0.85 0.18 80), oklch(0.55 0.18 25))",
+              boxShadow: "0 0 14px rgba(255,180,80,0.45)",
+            }}
+          />
+          <span className="font-display italic text-[22px] text-ink">
+            Patchwork
+          </span>
+          <span className="text-[10px] tracking-[0.2em] uppercase text-ink-3">
+            // multiplayer synth
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3.5 text-ink-3 text-[10px] tracking-[0.14em] uppercase">
+          <span>Room</span>
+          <span className="text-ink border border-hair px-2 py-1 rounded bg-panel-2">
+            {roomId}
+          </span>
+
+          <span className="flex items-center gap-1.5">
+            <span
+              className="w-1.5 h-1.5 rounded-full animate-[pulse-dot_1.6s_ease-in-out_infinite]"
               style={{
-                fontFamily: "monospace",
-                fontSize: "0.8rem",
-                border: "1px solid #aaa",
-                padding: "1px 4px",
-              }}
-              onBlur={(e) => commitName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter")
-                  commitName((e.target as HTMLInputElement).value);
-                if (e.key === "Escape") setEditingName(false);
+                background: "var(--c-amp)",
+                boxShadow: "0 0 8px var(--c-amp)",
               }}
             />
-          ) : (
-            <button
-              onClick={() => setEditingName(true)}
-              style={{
-                fontFamily: "monospace",
-                fontSize: "0.8rem",
-                background: "none",
-                border: "1px solid #ccc",
-                padding: "1px 6px",
-                cursor: "pointer",
-              }}
-            >
-              {name} ✎
-            </button>
-          )}
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              onClick={() => pickColor(c)}
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                background: c,
-                padding: 0,
-                cursor: "pointer",
-                border: "none",
-                outline: c === color ? "2px solid white" : "none",
-                outlineOffset: 2,
-              }}
-            />
-          ))}
-        </span>
-        <span style={{ color: "#888" }}>
-          Press <kbd>/</kbd> to chat
-        </span>
+            Live · {others.length + 1} jamming
+          </span>
+
+          {/* Peer chips */}
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.75 rounded-full border border-hair bg-panel-2 text-ink-2 text-[10px] tracking-[0.06em] normal-case">
+              <span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ background: color }}
+              />
+              {editingName ? (
+                <input
+                  autoFocus
+                  defaultValue={name}
+                  className="bg-transparent border-0 outline-none font-mono text-[10px] text-ink w-20"
+                  onBlur={(e) => commitName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter")
+                      commitName((e.target as HTMLInputElement).value);
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                />
+              ) : (
+                <button
+                  onClick={() => setEditingName(true)}
+                  className="bg-transparent border-0 cursor-pointer text-ink-2 font-mono text-[10px]"
+                >
+                  {name} ✎
+                </button>
+              )}
+            </span>
+            {others.map((other) => (
+              <span
+                key={other.connectionId}
+                className="inline-flex items-center gap-1.5 px-2 py-0.75 rounded-full border border-hair bg-panel-2 text-ink-2 text-[10px] tracking-[0.06em] normal-case"
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ background: other.presence.color || "#888" }}
+                />
+                {other.presence.name}
+              </span>
+            ))}
+          </div>
+
+          {/* Color picker */}
+          <div className="flex gap-1">
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => pickColor(c)}
+                className="w-3.5 h-3.5 rounded-full cursor-pointer border-0 p-0"
+                style={{
+                  background: c,
+                  outline:
+                    c === color ? "2px solid rgba(255,255,255,0.6)" : "none",
+                  outlineOffset: 2,
+                }}
+              />
+            ))}
+          </div>
+
+          <span className="text-ink-4">
+            Press <kbd className="border border-hair px-1 rounded">/</kbd> to
+            chat
+          </span>
+        </div>
       </div>
 
       <SynthInner params={params} setParams={setParams} />
 
+      <div className="flex mt-auto justify-between items-center text-ink-4 text-[9px] tracking-[0.18em] uppercase px-7 py-2 border-t border-hair">
+        <span>Patchwork · Jam Engine</span>
+        <span>
+          signal flow → osc → filter → amp · lfo modulates {params.lfoTarget}
+        </span>
+      </div>
+
       {/* Remote cursors */}
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          zIndex: 100,
-        }}
-      >
+      <div className="fixed inset-0 pointer-events-none z-100">
         {others.map((other) => {
           const cursor = other.presence.cursor;
           if (!cursor) return null;
@@ -346,48 +369,53 @@ function CollabSynthInner({
           return (
             <div
               key={other.connectionId}
+              className="absolute"
               style={{
-                position: "absolute",
                 left: cursor.x,
                 top: cursor.y,
                 transform: "translate(-2px, -2px)",
                 transition: "left 80ms linear, top 80ms linear",
               }}
             >
-              {/* Arrow cursor */}
               <svg
-                width="14"
-                height="18"
-                viewBox="0 0 14 18"
-                style={{ display: "block" }}
+                width="20"
+                height="22"
+                viewBox="0 0 20 22"
+                style={{
+                  display: "block",
+                  filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.4))",
+                }}
               >
                 <path
-                  d="M0 0 L0 14 L4 10 L7 16 L9 15 L6 9 L11 9 Z"
+                  d="M2 2 L2 18 L7 14 L10 21 L13 19 L10 12 L17 12 Z"
                   fill={c}
-                  stroke="white"
-                  strokeWidth="1"
+                  stroke="#0a0b0d"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
                 />
               </svg>
               <div
+                className="inline-block px-1.75 py-0.5 rounded font-mono text-[10px] font-semibold tracking-[0.04em] whitespace-nowrap mt-0.5"
                 style={{
-                  marginLeft: 14,
-                  marginTop: -14,
                   background: c,
-                  color: "white",
-                  fontSize: 11,
-                  padding: "2px 6px",
-                  borderRadius: 3,
-                  whiteSpace: "nowrap",
-                  maxWidth: 200,
+                  color: "#0a0b0d",
+                  transform: "translateX(10px)",
                 }}
               >
                 {other.presence.name}
-                {other.presence.chat && (
-                  <div style={{ fontStyle: "italic", marginTop: 2 }}>
-                    &ldquo;{other.presence.chat}&rdquo;
-                  </div>
-                )}
               </div>
+              {other.presence.chat && (
+                <div
+                  className="inline-block px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/60 border border-hair-2 whitespace-nowrap tracking-[0.08em] uppercase mt-0.5"
+                  style={{
+                    color: c,
+                    borderColor: c + "55",
+                    transform: "translateX(10px)",
+                  }}
+                >
+                  &ldquo;{other.presence.chat}&rdquo;
+                </div>
+              )}
             </div>
           );
         })}
@@ -395,22 +423,8 @@ function CollabSynthInner({
 
       {/* Slash chat input */}
       {chatInput !== null && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 24,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 200,
-            display: "flex",
-            gap: "0.5rem",
-            background: "white",
-            border: "1px solid black",
-            padding: "6px 10px",
-            fontFamily: "monospace",
-          }}
-        >
-          <span style={{ color: "#888" }}>/</span>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-200 flex gap-2 items-center bg-panel border border-hair rounded px-3 py-1.5">
+          <span className="text-ink-3">/</span>
           <input
             autoFocus
             value={chatInput}
@@ -420,19 +434,15 @@ function CollabSynthInner({
                 e.preventDefault();
                 submitChat();
               }
-              if (e.key === "Escape") {
-                setChatInput(null);
-              }
+              if (e.key === "Escape") setChatInput(null);
             }}
             placeholder="say something…"
-            style={{
-              border: "none",
-              outline: "none",
-              fontFamily: "monospace",
-              minWidth: 220,
-            }}
+            className="bg-transparent border-0 outline-none font-mono text-xs text-ink placeholder:text-ink-4 min-w-55"
           />
-          <button onClick={submitChat} style={{ fontFamily: "monospace" }}>
+          <button
+            onClick={submitChat}
+            className="font-mono text-[10px] tracking-widest uppercase text-ink-3 hover:text-ink cursor-pointer bg-transparent border-0"
+          >
             send
           </button>
         </div>
