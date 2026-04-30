@@ -185,6 +185,190 @@ function Knob({
   );
 }
 
+const VIZ_STROKE = "#333";
+const VIZ_GUIDE = "#e0e0e0";
+
+function WaveformViz({ waveform }: { waveform: OscillatorType }) {
+  const W = 180,
+    H = 48,
+    pad = 5;
+  const N = 300;
+  const pts: string[] = [];
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * 2;
+    const frac = t % 1;
+    let y: number;
+    if (waveform === "sine") y = Math.sin(Math.PI * 2 * t);
+    else if (waveform === "sawtooth") y = frac * 2 - 1;
+    else y = frac < 0.5 ? 1 : -1;
+    const sx = pad + (i / N) * (W - pad * 2);
+    const sy = H / 2 - y * (H / 2 - pad);
+    pts.push(`${i === 0 ? "M" : "L"}${sx.toFixed(1)},${sy.toFixed(1)}`);
+  }
+  return (
+    <svg width={W} height={H} className="block border border-stone-200">
+      <line
+        x1={pad}
+        y1={H / 2}
+        x2={W - pad}
+        y2={H / 2}
+        stroke={VIZ_GUIDE}
+        strokeWidth="1"
+      />
+      <path
+        d={pts.join(" ")}
+        fill="none"
+        stroke={VIZ_STROKE}
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+function AdsrViz({
+  a,
+  d,
+  s,
+  r,
+}: {
+  a: number;
+  d: number;
+  s: number;
+  r: number;
+}) {
+  const W = 180,
+    H = 52,
+    pad = 5;
+  const sus = Math.max(a + d, 0.1) * 0.6 + 0.15;
+  const total = a + d + sus + r;
+  const sx = (t: number) => (pad + (t / total) * (W - pad * 2)).toFixed(1);
+  const sy = (v: number) => (H - pad - v * (H - pad * 2)).toFixed(1);
+  const path = `M${sx(0)},${sy(0)} L${sx(a)},${sy(1)} L${sx(a + d)},${sy(s)} L${sx(a + d + sus)},${sy(s)} L${sx(a + d + sus + r)},${sy(0)}`;
+  return (
+    <svg width={W} height={H} className="block border border-stone-200">
+      <line
+        x1={pad}
+        y1={H - pad}
+        x2={W - pad}
+        y2={H - pad}
+        stroke={VIZ_GUIDE}
+        strokeWidth="1"
+      />
+      <path
+        d={path}
+        fill="none"
+        stroke={VIZ_STROKE}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LfoViz({ rate, depth }: { rate: number; depth: number }) {
+  const W = 180,
+    H = 48,
+    pad = 5;
+  const N = 300;
+  const amp = (depth / 1200) * (H / 2 - pad);
+  const pts: string[] = [];
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * 2;
+    const y = Math.sin(Math.PI * 2 * t);
+    const sx = pad + (i / N) * (W - pad * 2);
+    const sy = H / 2 - y * amp;
+    pts.push(`${i === 0 ? "M" : "L"}${sx.toFixed(1)},${sy.toFixed(1)}`);
+  }
+  // Rate tick marks: one tick per cycle, up to 8 shown
+  const ticks = Math.min(Math.round(rate), 8);
+  return (
+    <svg width={W} height={H} className="block border border-stone-200">
+      <line
+        x1={pad}
+        y1={H / 2}
+        x2={W - pad}
+        y2={H / 2}
+        stroke={VIZ_GUIDE}
+        strokeWidth="1"
+      />
+      {Array.from({ length: ticks }).map((_, i) => {
+        const x = (pad + ((i + 0.5) / ticks) * (W - pad * 2)).toFixed(1);
+        return (
+          <line
+            key={i}
+            x1={x}
+            y1={H - pad}
+            x2={x}
+            y2={H - pad - 4}
+            stroke={VIZ_GUIDE}
+            strokeWidth="1"
+          />
+        );
+      })}
+      <path
+        d={pts.join(" ")}
+        fill="none"
+        stroke={VIZ_STROKE}
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+function FilterViz({ cutoff, q }: { cutoff: number; q: number }) {
+  const W = 180,
+    H = 60,
+    pad = 5;
+  const minLog = Math.log10(20),
+    maxLog = Math.log10(20000);
+  const minDb = -48,
+    maxDb = 24;
+  const fToX = (f: number) =>
+    pad + ((Math.log10(f) - minLog) / (maxLog - minLog)) * (W - pad * 2);
+  const dbToY = (db: number) =>
+    H - pad - ((db - minDb) / (maxDb - minDb)) * (H - pad * 2);
+  const N = 300;
+  const pts: string[] = [];
+  for (let i = 0; i <= N; i++) {
+    const f = Math.pow(10, minLog + (i / N) * (maxLog - minLog));
+    const wn = f / cutoff;
+    const gain = 1 / Math.sqrt(Math.pow(1 - wn * wn, 2) + Math.pow(wn / q, 2));
+    const db = 20 * Math.log10(Math.max(gain, 1e-6));
+    const x = fToX(f).toFixed(1);
+    const y = Math.max(pad, Math.min(H - pad, dbToY(db))).toFixed(1);
+    pts.push(`${i === 0 ? "M" : "L"}${x},${y}`);
+  }
+  const cx = fToX(cutoff).toFixed(1);
+  const zeroY = dbToY(0).toFixed(1);
+  return (
+    <svg width={W} height={H} className="block border border-stone-200">
+      <line
+        x1={pad}
+        y1={zeroY}
+        x2={W - pad}
+        y2={zeroY}
+        stroke={VIZ_GUIDE}
+        strokeWidth="1"
+      />
+      <line
+        x1={cx}
+        y1={pad}
+        x2={cx}
+        y2={H - pad}
+        stroke={VIZ_GUIDE}
+        strokeWidth="1"
+        strokeDasharray="3,3"
+      />
+      <path
+        d={pts.join(" ")}
+        fill="none"
+        stroke={VIZ_STROKE}
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
 export function SynthInner({
   params,
   setParams,
@@ -573,187 +757,210 @@ export function SynthInner({
   const keys = Object.entries(KEY_TO_SEMITONE);
 
   return (
-    <div style={{ padding: "1rem", fontFamily: "monospace" }}>
+    <div className="p-4 font-mono flex flex-col gap-6 text-xs">
       <h1>Patchwork Synth</h1>
-      <p className="mb-8">
+      <p>
         Press keyboard keys to play. <strong>Z</strong> / <strong>X</strong>{" "}
         shift octave. Current octave: <strong>{params.octave}</strong>
       </p>
 
       <fieldset>
         <legend>Waveform</legend>
-        {(["sine", "sawtooth", "square"] as OscillatorType[]).map((w) => (
-          <label key={w} style={{ marginRight: "1rem" }}>
-            <input
-              type="radio"
-              name="waveform"
-              value={w}
-              checked={params.waveform === w}
-              onChange={() => setParams((p) => ({ ...p, waveform: w }))}
-            />{" "}
-            {w}
-          </label>
-        ))}
-      </fieldset>
-
-      <fieldset>
-        <legend>Volume</legend>
-        <div className="flex gap-4 pt-2">
-          <Knob
-            label="Level"
-            value={params.volume}
-            min={0}
-            max={1}
-            step={0.01}
-            displayFn={(v) => v.toFixed(2)}
-            onChange={set("volume")}
-          />
+        <div className="flex items-center gap-10 flex-wrap pt-1">
+          <WaveformViz waveform={params.waveform} />
+          <div>
+            {(["sine", "sawtooth", "square"] as OscillatorType[]).map((w) => (
+              <label key={w} className="mr-4 inline-block">
+                <input
+                  type="radio"
+                  name="waveform"
+                  value={w}
+                  checked={params.waveform === w}
+                  onChange={() => setParams((p) => ({ ...p, waveform: w }))}
+                />{" "}
+                {w}
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-4 pt-2">
+            <Knob
+              label="Level"
+              value={params.volume}
+              min={0}
+              max={1}
+              step={0.01}
+              displayFn={(v) => v.toFixed(2)}
+              onChange={set("volume")}
+            />
+          </div>
         </div>
       </fieldset>
 
       <fieldset>
         <legend>Filter</legend>
-        <div className="flex gap-4 pt-2">
-          <Knob
-            label="Cutoff"
-            value={params.filterCutoff}
-            min={20}
-            max={20000}
-            step={10}
-            displayFn={(v) => `${Math.round(v)}Hz`}
-            onChange={set("filterCutoff")}
-          />
-          <Knob
-            label="Res"
-            value={params.filterRes}
-            min={0.1}
-            max={20}
-            step={0.1}
-            displayFn={(v) => v.toFixed(1)}
-            onChange={set("filterRes")}
-          />
+        <div className="flex items-center gap-10 flex-wrap pt-2">
+          <FilterViz cutoff={params.filterCutoff} q={params.filterRes} />
+          <div className="flex gap-4">
+            <Knob
+              label="Cutoff"
+              value={params.filterCutoff}
+              min={20}
+              max={20000}
+              step={10}
+              displayFn={(v) => `${Math.round(v)}Hz`}
+              onChange={set("filterCutoff")}
+            />
+            <Knob
+              label="Res"
+              value={params.filterRes}
+              min={0.1}
+              max={20}
+              step={0.1}
+              displayFn={(v) => v.toFixed(1)}
+              onChange={set("filterRes")}
+            />
+          </div>
         </div>
       </fieldset>
 
       <fieldset>
         <legend>Amplitude Envelope</legend>
-        <div className="flex gap-4 pt-2">
-          <Knob
-            label="Attack"
-            value={params.ampA}
-            min={0.001}
-            max={4}
-            step={0.001}
-            displayFn={(v) => `${v.toFixed(3)}s`}
-            onChange={set("ampA")}
+        <div className="flex items-center gap-10 flex-wrap pt-2">
+          <AdsrViz
+            a={params.ampA}
+            d={params.ampD}
+            s={params.ampS}
+            r={params.ampR}
           />
-          <Knob
-            label="Decay"
-            value={params.ampD}
-            min={0.001}
-            max={4}
-            step={0.001}
-            displayFn={(v) => `${v.toFixed(3)}s`}
-            onChange={set("ampD")}
-          />
-          <Knob
-            label="Sustain"
-            value={params.ampS}
-            min={0}
-            max={1}
-            step={0.01}
-            displayFn={(v) => v.toFixed(2)}
-            onChange={set("ampS")}
-          />
-          <Knob
-            label="Release"
-            value={params.ampR}
-            min={0.001}
-            max={4}
-            step={0.001}
-            displayFn={(v) => `${v.toFixed(3)}s`}
-            onChange={set("ampR")}
-          />
+          <div className="flex gap-4">
+            <Knob
+              label="Attack"
+              value={params.ampA}
+              min={0.001}
+              max={4}
+              step={0.001}
+              displayFn={(v) => `${v.toFixed(3)}s`}
+              onChange={set("ampA")}
+            />
+            <Knob
+              label="Decay"
+              value={params.ampD}
+              min={0.001}
+              max={4}
+              step={0.001}
+              displayFn={(v) => `${v.toFixed(3)}s`}
+              onChange={set("ampD")}
+            />
+            <Knob
+              label="Sustain"
+              value={params.ampS}
+              min={0}
+              max={1}
+              step={0.01}
+              displayFn={(v) => v.toFixed(2)}
+              onChange={set("ampS")}
+            />
+            <Knob
+              label="Release"
+              value={params.ampR}
+              min={0.001}
+              max={4}
+              step={0.001}
+              displayFn={(v) => `${v.toFixed(3)}s`}
+              onChange={set("ampR")}
+            />
+          </div>
         </div>
       </fieldset>
 
       <fieldset>
         <legend>Filter Envelope</legend>
-        <div className="flex gap-4 pt-2">
-          <Knob
-            label="Amt"
-            value={params.filtEnvAmt}
-            min={0}
-            max={15000}
-            step={10}
-            displayFn={(v) => `${Math.round(v)}Hz`}
-            onChange={set("filtEnvAmt")}
+        <div className="flex items-center gap-10 flex-wrap pt-2">
+          <AdsrViz
+            a={params.filtA}
+            d={params.filtD}
+            s={params.filtS}
+            r={params.filtR}
           />
-          <Knob
-            label="Attack"
-            value={params.filtA}
-            min={0.001}
-            max={4}
-            step={0.001}
-            displayFn={(v) => `${v.toFixed(3)}s`}
-            onChange={set("filtA")}
-          />
-          <Knob
-            label="Decay"
-            value={params.filtD}
-            min={0.001}
-            max={4}
-            step={0.001}
-            displayFn={(v) => `${v.toFixed(3)}s`}
-            onChange={set("filtD")}
-          />
-          <Knob
-            label="Sustain"
-            value={params.filtS}
-            min={0}
-            max={1}
-            step={0.01}
-            displayFn={(v) => v.toFixed(2)}
-            onChange={set("filtS")}
-          />
-          <Knob
-            label="Release"
-            value={params.filtR}
-            min={0.001}
-            max={4}
-            step={0.001}
-            displayFn={(v) => `${v.toFixed(3)}s`}
-            onChange={set("filtR")}
-          />
+          <div className="flex gap-4">
+            <Knob
+              label="Amt"
+              value={params.filtEnvAmt}
+              min={0}
+              max={15000}
+              step={10}
+              displayFn={(v) => `${Math.round(v)}Hz`}
+              onChange={set("filtEnvAmt")}
+            />
+            <Knob
+              label="Attack"
+              value={params.filtA}
+              min={0.001}
+              max={4}
+              step={0.001}
+              displayFn={(v) => `${v.toFixed(3)}s`}
+              onChange={set("filtA")}
+            />
+            <Knob
+              label="Decay"
+              value={params.filtD}
+              min={0.001}
+              max={4}
+              step={0.001}
+              displayFn={(v) => `${v.toFixed(3)}s`}
+              onChange={set("filtD")}
+            />
+            <Knob
+              label="Sustain"
+              value={params.filtS}
+              min={0}
+              max={1}
+              step={0.01}
+              displayFn={(v) => v.toFixed(2)}
+              onChange={set("filtS")}
+            />
+            <Knob
+              label="Release"
+              value={params.filtR}
+              min={0.001}
+              max={4}
+              step={0.001}
+              displayFn={(v) => `${v.toFixed(3)}s`}
+              onChange={set("filtR")}
+            />
+          </div>
         </div>
       </fieldset>
 
       <fieldset>
         <legend>LFO</legend>
-        <div className="flex gap-4 pt-2">
-          <Knob
-            label="Rate"
-            value={params.lfoRate}
-            min={0.1}
-            max={20}
-            step={0.1}
-            displayFn={(v) => `${v.toFixed(1)}Hz`}
-            onChange={set("lfoRate")}
-          />
-          <Knob
-            label="Depth"
-            value={params.lfoDepth}
-            min={0}
-            max={1200}
-            step={1}
-            displayFn={(v) => `${Math.round(v)}`}
-            onChange={set("lfoDepth")}
-          />
+        <div className="flex items-center gap-10 flex-wrap pt-2">
+          <LfoViz rate={params.lfoRate} depth={params.lfoDepth} />
+          <div className="flex gap-4">
+            <Knob
+              label="Rate"
+              value={params.lfoRate}
+              min={0.1}
+              max={20}
+              step={0.1}
+              displayFn={(v) => `${v.toFixed(1)}Hz`}
+              onChange={set("lfoRate")}
+            />
+            <Knob
+              label="Depth"
+              value={params.lfoDepth}
+              min={0}
+              max={1200}
+              step={1}
+              displayFn={(v) => `${Math.round(v)}`}
+              onChange={set("lfoDepth")}
+            />
+          </div>
         </div>
-        <div style={{ marginTop: "0.5rem" }}>
+        <div className="mt-2">
           Target:{" "}
           {(["none", "pitch", "filter"] as const).map((t) => (
-            <label key={t} style={{ marginRight: "1rem" }}>
+            <label key={t} className="mr-4">
               <input
                 type="radio"
                 name="lfoTarget"
@@ -769,14 +976,7 @@ export function SynthInner({
 
       <fieldset>
         <legend>Keyboard — octave {params.octave} (Z = down, X = up)</legend>
-        <div
-          style={{
-            display: "flex",
-            gap: "2px",
-            userSelect: "none",
-            marginTop: "0.5rem",
-          }}
-        >
+        <div className="flex gap-0.5 select-none mt-2">
           {keys.map(([key, semitone]) => {
             const noteName = NOTE_NAMES[semitone % 12];
             const isSharp = noteName.includes("#");
@@ -784,15 +984,7 @@ export function SynthInner({
             return (
               <div
                 key={key}
-                style={{
-                  border: "1px solid black",
-                  padding: "0.5rem 0.3rem",
-                  minWidth: "2rem",
-                  textAlign: "center",
-                  background: isActive ? "#888" : isSharp ? "#222" : "#fff",
-                  color: isActive ? "#fff" : isSharp ? "#fff" : "#000",
-                  cursor: "pointer",
-                }}
+                className={`border border-black py-2 px-1 min-w-8 text-center cursor-pointer text-xs ${isActive ? "bg-stone-500 text-white" : isSharp ? "bg-stone-900 text-white" : "bg-white text-black"}`}
                 onMouseDown={() => {
                   if (!pressedRef.current.has(key)) {
                     pressedRef.current.add(key);
@@ -817,7 +1009,7 @@ export function SynthInner({
                 }}
               >
                 <div>{key.toUpperCase()}</div>
-                <div style={{ fontSize: "0.65rem" }}>{noteName}</div>
+                <div className="text-[0.6rem]">{noteName}</div>
               </div>
             );
           })}
@@ -829,12 +1021,10 @@ export function SynthInner({
         {exportStatus ? (
           <span>{exportStatus}</span>
         ) : (
-          <>
-            <button onClick={exportSFZ} style={{ marginRight: "0.5rem" }}>
-              SFZ + WAV (.zip)
-            </button>
+          <div className="flex gap-2 pt-1">
+            <button onClick={exportSFZ}>SFZ + WAV (.zip)</button>
             <button onClick={exportSF2}>SF2</button>
-          </>
+          </div>
         )}
       </fieldset>
     </div>
