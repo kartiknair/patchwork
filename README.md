@@ -1,5 +1,35 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Multiplayer backend
+
+Room presence and synth-parameter sync run on a Rust core compiled to
+WebAssembly, using [matchbox](https://github.com/johanhelsing/matchbox) for
+peer-to-peer WebRTC networking (full mesh, no app server holds state). See
+`rust/patchwork-net` for the crate and `rust/signaling/README.md` for how to
+run the signaling server.
+
+One-time local setup:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack --locked
+```
+
+`npm run dev`/`npm run build` automatically run `wasm-pack build` first (see
+the `predev`/`prebuild` scripts in `package.json`) to regenerate
+`app/wasm/patchwork-net/` from the Rust source - that directory is gitignored,
+not committed.
+
+You'll also need a running `matchbox_server` and
+`NEXT_PUBLIC_MATCHBOX_SIGNALING_URL` set in `.env.local` (see `.env.example`
+and `rust/signaling/README.md`) for rooms to sync between browser tabs.
+
+**Deploying to Vercel**: the standard Vercel build image has no Rust/cargo, so
+the `prebuild` wasm step will fail out of the box. Either override the Vercel
+install command to install `rustup`/`wasm-pack` first, commit the generated
+`app/wasm/patchwork-net/` output and drop the prebuild hook, or deploy to a
+Docker-based host with Rust preinstalled instead.
+
 ## Getting Started
 
 First, run the development server:
