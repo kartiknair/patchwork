@@ -5,13 +5,13 @@
   "scripts": {
     "predev": "npm run build:wasm",
     "dev": "next dev",
-    "prebuild": "npm run build:wasm",
     "build": "next build",
     "build:wasm": "wasm-pack build rust/patchwork-net --target web --out-dir ../../app/wasm/patchwork-net --out-name patchwork_net",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "jszip": "^3.10.1",
     "next": "16.2.4",
     "react": "19.2.4",
