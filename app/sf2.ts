@@ -82,7 +82,7 @@ export function buildSF2(
 
   // phdr — 38 bytes: name(20) preset(2) bank(2) bagIdx(2) lib(4) genre(4) morph(4)
   const phdrData = concat([
-    concat([str('Patchwork Synth', 20), u16(0), u16(0), u16(0), u32(0), u32(0), u32(0)]),
+    concat([str('Jamboree Synth', 20), u16(0), u16(0), u16(0), u32(0), u32(0), u32(0)]),
     concat([str('EOP', 20), u16(255), u16(255), u16(1), u32(0), u32(0), u32(0)]),
   ])
 
@@ -97,7 +97,7 @@ export function buildSF2(
 
   // inst — 22 bytes: name(20) bagIdx(2)
   const instData = concat([
-    concat([str('Patchwork Synth', 20), u16(0)]),
+    concat([str('Jamboree Synth', 20), u16(0)]),
     concat([str('EOI', 20), u16(N)]),
   ])
 

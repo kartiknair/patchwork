@@ -43,3 +43,5 @@ next-env.d.ts
 # rust / wasm build artifacts
 /app/wasm/patchwork-net/
 /rust/target/
+
+.vercel

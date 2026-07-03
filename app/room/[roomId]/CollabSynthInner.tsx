@@ -112,7 +112,7 @@ export default function CollabSynthInner({
             }}
           />
           <span className="font-display italic text-[22px] text-ink">
-            Patchwork
+            Jamboree
           </span>
           <span className="text-[10px] tracking-[0.2em] uppercase text-ink-3">
             // multiplayer synth
@@ -205,7 +205,7 @@ export default function CollabSynthInner({
       <SynthInner params={params} setParams={setParams} />
 
       <div className="flex mt-auto justify-between items-center text-ink-4 text-[9px] tracking-[0.18em] uppercase px-7 py-2 border-t border-hair">
-        <span>Patchwork · Jam Engine</span>
+        <span>Jamboree · Jam Engine</span>
         <span>
           signal flow → osc → filter → amp · lfo modulates {params.lfoTarget}
         </span>

@@ -1,6 +1,6 @@
 # Matchbox signaling server
 
-Patchwork's multiplayer rooms are peer-to-peer (WebRTC data channels, full mesh).
+Jamboree's multiplayer rooms are peer-to-peer (WebRTC data channels, full mesh).
 The only server-side piece is a *signaling* server that introduces peers to each
 other so they can negotiate a direct connection - once connected, no traffic
 flows through it. This directory has no code of its own: `matchbox_server` is a

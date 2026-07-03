@@ -30,7 +30,7 @@ export default function Home() {
             }}
           />
           <span className="font-display italic text-[22px] text-ink">
-            Patchwork
+            Jamboree
           </span>
           <span className="text-[10px] tracking-[0.2em] uppercase text-ink-3">
             // multiplayer synth
@@ -93,7 +93,7 @@ export default function Home() {
         </div>
       </div>
       <div className="flex justify-between items-center text-ink-4 text-[9px] tracking-[0.18em] uppercase px-7 py-4 border-t border-hair">
-        <span>Patchwork · 0.1.0</span>
+        <span>Jamboree · 0.1.0</span>
         <span>Up to 8 users per room</span>
       </div>
     </div>

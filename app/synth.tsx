@@ -1237,7 +1237,7 @@ export function SynthInner({
     );
     setExportStatus("Building SFZ…");
     await new Promise<void>((r) => setTimeout(r, 0));
-    const sfz = ["// Patchwork Synth export", ""];
+    const sfz = ["// Jamboree Synth export", ""];
     for (let i = 0; i < samples.length; i++) {
       const { midi, name, data } = samples[i];
       const lo = i === 0 ? 0 : Math.floor((samples[i - 1].midi + midi) / 2) + 1;
@@ -1262,7 +1262,7 @@ export function SynthInner({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "patchwork.zip";
+    a.download = "jamboree.zip";
     a.click();
     URL.revokeObjectURL(url);
     setExportStatus(null);
@@ -1277,13 +1277,13 @@ export function SynthInner({
     const sf2 = buildSF2(
       samples.map((s) => ({ midi: s.midi, data: s.data })),
       SAMPLE_RATE,
-      "Patchwork Synth",
+      "Jamboree Synth",
     );
     const blob = new Blob([sf2], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "patchwork.sf2";
+    a.download = "jamboree.sf2";
     a.click();
     URL.revokeObjectURL(url);
     setExportStatus(null);

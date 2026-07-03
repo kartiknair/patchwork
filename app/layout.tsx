@@ -18,7 +18,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Patchwork — Multiplayer Synth",
+  title: "Jamboree — Multiplayer Synth",
   description: "A multiplayer synthesizer. Join a room and jam.",
 };
 
