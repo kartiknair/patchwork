@@ -10,6 +10,7 @@ function randomId() {
 export default function Home() {
   const router = useRouter();
   const [roomId, setRoomId] = useState("");
+  const [showInfo, setShowInfo] = useState(false);
 
   const join = () => {
     const id = roomId.trim() || randomId();
@@ -92,9 +93,37 @@ export default function Home() {
           </div>
         </div>
       </div>
-      <div className="flex justify-between items-center text-ink-4 text-[9px] tracking-[0.18em] uppercase px-7 py-4 border-t border-hair">
-        <span>Jamboree · 0.1.0</span>
+      <div className="relative flex justify-between items-center text-ink-4 text-[9px] tracking-[0.18em] uppercase px-7 py-4 border-t border-hair">
+        <button
+          onClick={() => setShowInfo((v) => !v)}
+          className="bg-transparent border-0 p-0 cursor-pointer font-mono text-ink-4 hover:text-ink-2 text-[9px] tracking-[0.18em] uppercase transition-colors"
+        >
+          Jamboree · 0.1.0
+        </button>
         <span>Up to 8 users per room</span>
+        {showInfo && (
+          <div className="absolute bottom-full left-7 mb-2 max-w-xs bg-panel border border-hair rounded-md px-3 py-2 text-[10px] normal-case tracking-normal text-ink-3 leading-relaxed">
+            True P2P multiplayer, powered by{" "}
+            <a
+              href="https://github.com/johanhelsing/matchbox"
+              target="_blank"
+              rel="noreferrer"
+              className="text-ink-2 underline hover:text-ink"
+            >
+              matchbox
+            </a>
+            . Built by{" "}
+            <a
+              href="https://kartik.is"
+              target="_blank"
+              rel="noreferrer"
+              className="text-ink-2 underline hover:text-ink"
+            >
+              Kartik
+            </a>
+            .
+          </div>
+        )}
       </div>
     </div>
   );

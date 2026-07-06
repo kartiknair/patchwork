@@ -26,6 +26,7 @@ export default function CollabSynthInner({
   );
 
   const [chatInput, setChatInput] = useState<string | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
   const chatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [name, setName] = useState(initialName);
   const [editingName, setEditingName] = useState(false);
@@ -204,11 +205,39 @@ export default function CollabSynthInner({
 
       <SynthInner params={params} setParams={setParams} />
 
-      <div className="flex mt-auto justify-between items-center text-ink-4 text-[9px] tracking-[0.18em] uppercase px-7 py-2 border-t border-hair">
-        <span>Jamboree · Jam Engine</span>
+      <div className="relative flex mt-auto justify-between items-center text-ink-4 text-[9px] tracking-[0.18em] uppercase px-7 py-2 border-t border-hair">
+        <button
+          onClick={() => setShowInfo((v) => !v)}
+          className="bg-transparent border-0 p-0 cursor-pointer font-mono text-ink-4 hover:text-ink-2 text-[9px] tracking-[0.18em] uppercase transition-colors"
+        >
+          Jamboree · Jam Engine
+        </button>
         <span>
           signal flow → osc → filter → amp · lfo modulates {params.lfoTarget}
         </span>
+        {showInfo && (
+          <div className="absolute bottom-full left-7 mb-2 max-w-xs bg-panel border border-hair rounded-md px-3 py-2 text-[10px] normal-case tracking-normal text-ink-3 leading-relaxed">
+            True P2P multiplayer, powered by{" "}
+            <a
+              href="https://github.com/johanhelsing/matchbox"
+              target="_blank"
+              rel="noreferrer"
+              className="text-ink-2 underline hover:text-ink"
+            >
+              matchbox
+            </a>
+            . Built by{" "}
+            <a
+              href="https://kartik.is"
+              target="_blank"
+              rel="noreferrer"
+              className="text-ink-2 underline hover:text-ink"
+            >
+              Kartik
+            </a>
+            .
+          </div>
+        )}
       </div>
 
       {/* Remote cursors */}
