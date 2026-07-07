@@ -24,6 +24,11 @@ You'll also need a running `matchbox_server` and
 `NEXT_PUBLIC_MATCHBOX_SIGNALING_URL` set in `.env.local` (see `.env.example`
 and `rust/signaling/README.md`) for rooms to sync between browser tabs.
 
+Cross-device connections additionally need a TURN relay
+(`NEXT_PUBLIC_MATCHBOX_ICE_SERVERS` in `.env.example`) - STUN alone isn't
+enough for peers on different networks, or even the same LAN if the router
+doesn't support NAT hairpinning. See `rust/turn/README.md`.
+
 **Deploying to Vercel**: the standard Vercel build image has no Rust/cargo, so
 the `prebuild` wasm step will fail out of the box. Either override the Vercel
 install command to install `rustup`/`wasm-pack` first, commit the generated

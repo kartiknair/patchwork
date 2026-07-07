@@ -56,6 +56,8 @@ struct PeerPresenceJson {
     color: String,
     cursor: Option<Cursor>,
     chat: Option<String>,
+    active_control: Option<String>,
+    active_notes: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -101,6 +103,8 @@ impl Inner {
                 color: p.color.clone(),
                 cursor: p.cursor.clone(),
                 chat: p.chat.clone(),
+                active_control: p.active_control.clone(),
+                active_notes: p.active_notes.clone(),
             })
             .collect()
     }
@@ -195,6 +199,29 @@ impl Inner {
                         p.chat = Some(text);
                         p.chat_expires_at = expires_at;
                         presence_dirty = true;
+                    }
+                }
+                WireMessage::ActiveControl { label } => {
+                    if let Some(p) = self.room.presences.get_mut(&key) {
+                        p.active_control = label;
+                        presence_dirty = true;
+                    }
+                }
+                WireMessage::NoteOn { note } => {
+                    if let Some(p) = self.room.presences.get_mut(&key) {
+                        if !p.active_notes.contains(&note) {
+                            p.active_notes.push(note);
+                            presence_dirty = true;
+                        }
+                    }
+                }
+                WireMessage::NoteOff { note } => {
+                    if let Some(p) = self.room.presences.get_mut(&key) {
+                        let before = p.active_notes.len();
+                        p.active_notes.retain(|n| *n != note);
+                        if p.active_notes.len() != before {
+                            presence_dirty = true;
+                        }
                     }
                 }
                 WireMessage::ParamUpdate(entry) => {
@@ -351,6 +378,22 @@ impl MatchboxRoom {
             color: inner.color.clone(),
         };
         inner.broadcast(&msg, CHANNEL_RELIABLE);
+    }
+
+    pub fn set_active_control(&mut self, label: Option<String>) {
+        let mut inner = self.inner.borrow_mut();
+        let msg = WireMessage::ActiveControl { label };
+        inner.broadcast(&msg, CHANNEL_RELIABLE);
+    }
+
+    pub fn note_on(&mut self, note: String) {
+        let mut inner = self.inner.borrow_mut();
+        inner.broadcast(&WireMessage::NoteOn { note }, CHANNEL_RELIABLE);
+    }
+
+    pub fn note_off(&mut self, note: String) {
+        let mut inner = self.inner.borrow_mut();
+        inner.broadcast(&WireMessage::NoteOff { note }, CHANNEL_RELIABLE);
     }
 
     pub fn send_chat(&mut self, text: String) {

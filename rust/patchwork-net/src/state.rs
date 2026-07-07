@@ -107,6 +107,8 @@ pub struct PresenceState {
     pub cursor: Option<Cursor>,
     pub chat: Option<String>,
     pub chat_expires_at: u64,
+    pub active_control: Option<String>,
+    pub active_notes: Vec<String>,
 }
 
 pub struct RoomState {

@@ -11,6 +11,8 @@ type OtherPeer = {
   color: string;
   cursor: Cursor;
   chat: string | null;
+  activeControl: string | null;
+  activeNotes: string[];
 };
 
 type PresencePartial = {
@@ -18,6 +20,7 @@ type PresencePartial = {
   name?: string;
   color?: string;
   chat?: string | null;
+  activeControl?: string | null;
 };
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
@@ -28,6 +31,9 @@ type MatchboxRoomHandle = {
   clear_cursor(): void;
   set_name(name: string): void;
   set_color(color: string): void;
+  set_active_control(label: string | null | undefined): void;
+  note_on(note: string): void;
+  note_off(note: string): void;
   send_chat(text: string): void;
   set_param(field: string, value: number | string): void;
   self_peer_id(): string;
@@ -49,6 +55,8 @@ type WasmPeerPresence = {
   color: string;
   cursor: Cursor;
   chat: string | null;
+  active_control: string | null;
+  active_notes: string[];
 };
 
 export function useMatchboxRoom(
@@ -107,6 +115,8 @@ export function useMatchboxRoom(
                   color: p.color,
                   cursor: p.cursor,
                   chat: p.chat,
+                  activeControl: p.active_control,
+                  activeNotes: p.active_notes,
                 })),
               );
               break;
@@ -142,9 +152,21 @@ export function useMatchboxRoom(
       }
       if (partial.name !== undefined) room.set_name(partial.name);
       if (partial.color !== undefined) room.set_color(partial.color);
+      if (partial.activeControl !== undefined)
+        room.set_active_control(partial.activeControl);
       if (partial.chat !== undefined && partial.chat !== null) {
         room.send_chat(partial.chat);
       }
+    },
+    [],
+  );
+
+  const broadcastNote = useMemo(
+    () => (note: string, on: boolean) => {
+      const room = roomRef.current;
+      if (!room) return;
+      if (on) room.note_on(note);
+      else room.note_off(note);
     },
     [],
   );
@@ -174,5 +196,6 @@ export function useMatchboxRoom(
     params,
     setParams: setParamsAndBroadcast,
     updateMyPresence,
+    broadcastNote,
   };
 }

@@ -121,14 +121,38 @@ pub struct Cursor {
 pub enum WireMessage {
     /// Announced by a peer as soon as its socket connects to any other peer.
     /// Triggers the receiver to unicast back a `FullStateSnapshot`.
-    Hello { name: String, color: String },
+    Hello {
+        name: String,
+        color: String,
+    },
     /// High-frequency, sent on the unreliable/unordered channel.
-    PresenceUpdate { cursor: Option<Cursor> },
+    PresenceUpdate {
+        cursor: Option<Cursor>,
+    },
     /// Sent on the reliable channel so name/color changes aren't dropped.
-    IdentityUpdate { name: String, color: String },
+    IdentityUpdate {
+        name: String,
+        color: String,
+    },
+    /// Sent on the reliable channel whenever the sender starts or stops
+    /// dragging a knob; `label` is the knob's display label, `None` clears it.
+    ActiveControl {
+        label: Option<String>,
+    },
+    /// Sent on the reliable channel when the sender presses/releases a note,
+    /// for peer key-highlighting only - unrelated to audio scheduling.
+    NoteOn {
+        note: String,
+    },
+    NoteOff {
+        note: String,
+    },
     /// expires_at is the sender's local clock + 5000ms; every peer (including the
     /// sender) independently clears the bubble once its own clock passes it.
-    ChatMessage { text: String, expires_at: u64 },
+    ChatMessage {
+        text: String,
+        expires_at: u64,
+    },
     ParamUpdate(ParamEntry),
     /// Unicast reply to a `Hello` from an unrecognized peer. Merging is
     /// idempotent/commutative (per-field LWW), so receiving several of these

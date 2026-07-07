@@ -11,4 +11,5 @@ Real-time sync (`app/room/[roomId]`) runs on a Rust/WebAssembly core in
 wasm32-unknown-unknown` and `cargo install wasm-pack` once locally; `npm run
 dev`/`build` regenerate `app/wasm/patchwork-net/` (gitignored) via
 `predev`/`prebuild`. See `rust/signaling/README.md` for the matchmaking
-signaling server and README.md for the Vercel deployment caveat.
+signaling server, `rust/turn/README.md` for the TURN relay needed for
+cross-device NAT traversal, and README.md for the Vercel deployment caveat.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SynthInner } from "../../synth";
 import { useMatchboxRoom } from "./useMatchboxRoom";
 import { COLORS } from "./CollabSynth";
@@ -18,12 +18,19 @@ export default function CollabSynthInner({
   initialName: string;
   initialColor: string;
 }) {
-  const { others, params, setParams, updateMyPresence } = useMatchboxRoom(
-    roomId,
-    signalingUrl,
-    initialName,
-    initialColor,
-  );
+  const { others, params, setParams, updateMyPresence, broadcastNote } =
+    useMatchboxRoom(roomId, signalingUrl, initialName, initialColor);
+
+  const peerDown = useMemo(() => {
+    const map: Record<string, { id: string; name: string; color: string }> =
+      {};
+    for (const other of others) {
+      for (const note of other.activeNotes) {
+        map[note] = { id: other.peerId, name: other.name, color: other.color };
+      }
+    }
+    return map;
+  }, [others]);
 
   const [chatInput, setChatInput] = useState<string | null>(null);
   const [showInfo, setShowInfo] = useState(false);
@@ -36,11 +43,24 @@ export default function CollabSynthInner({
     const onMove = (e: MouseEvent) =>
       updateMyPresence({ cursor: { x: e.clientX, y: e.clientY } });
     const onLeave = () => updateMyPresence({ cursor: null });
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (t) updateMyPresence({ cursor: { x: t.clientX, y: t.clientY } });
+    };
+    const onTouchEnd = () => updateMyPresence({ cursor: null });
     window.addEventListener("mousemove", onMove);
     document.documentElement.addEventListener("mouseleave", onLeave);
+    window.addEventListener("touchstart", onTouch, { passive: true });
+    window.addEventListener("touchmove", onTouch, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
     return () => {
       window.removeEventListener("mousemove", onMove);
       document.documentElement.removeEventListener("mouseleave", onLeave);
+      window.removeEventListener("touchstart", onTouch);
+      window.removeEventListener("touchmove", onTouch);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
     };
   }, [updateMyPresence]);
 
@@ -203,7 +223,13 @@ export default function CollabSynthInner({
         </div>
       </div>
 
-      <SynthInner params={params} setParams={setParams} />
+      <SynthInner
+        params={params}
+        setParams={setParams}
+        peerDown={peerDown}
+        onKnobActivity={(label) => updateMyPresence({ activeControl: label })}
+        onNoteActivity={(note, active) => broadcastNote(note, active)}
+      />
 
       <div className="relative flex mt-auto justify-between items-center text-ink-4 text-[9px] tracking-[0.18em] uppercase px-7 py-2 border-t border-hair">
         <button
@@ -284,6 +310,19 @@ export default function CollabSynthInner({
               >
                 {other.name}
               </div>
+              {other.activeControl && (
+                <div
+                  className="inline-block px-1.5 py-0.5 rounded border text-[9px] font-mono whitespace-nowrap tracking-[0.08em] uppercase mt-0.5"
+                  style={{
+                    color: c,
+                    borderColor: c,
+                    background: "none",
+                    transform: "translateX(10px)",
+                  }}
+                >
+                  {other.activeControl}
+                </div>
+              )}
               {other.chat && (
                 <div
                   className="inline-block px-1.5 py-0.5 rounded text-[9px] font-mono bg-black/60 border border-hair-2 whitespace-nowrap tracking-[0.08em] uppercase mt-0.5"

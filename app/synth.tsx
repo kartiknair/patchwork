@@ -249,6 +249,7 @@ function Knob({
   size = 44,
   peerActive = false,
   dataKey,
+  onActiveChange,
 }: {
   value: number;
   min?: number;
@@ -261,6 +262,7 @@ function Knob({
   size?: number;
   peerActive?: boolean;
   dataKey?: string;
+  onActiveChange?: (active: boolean) => void;
 }) {
   const [drag, setDrag] = useState(false);
   const startY = useRef(0);
@@ -285,25 +287,51 @@ function Knob({
 
   const tickAng = ((-135 + 270 * norm) * Math.PI) / 180;
 
+  function beginDrag(clientY: number) {
+    setDrag(true);
+    startY.current = clientY;
+    startV.current = value;
+    onActiveChange?.(true);
+  }
+
+  function applyDrag(clientY: number) {
+    let next =
+      startV.current + ((startY.current - clientY) / 140) * (max - min);
+    next = clamp(next, min, max);
+    if (step) next = Math.round(next / step) * step;
+    onChange(next);
+  }
+
   function onDown(e: React.MouseEvent) {
     e.preventDefault();
-    setDrag(true);
-    startY.current = e.clientY;
-    startV.current = value;
-    const move = (ev: MouseEvent) => {
-      let next =
-        startV.current + ((startY.current - ev.clientY) / 140) * (max - min);
-      next = clamp(next, min, max);
-      if (step) next = Math.round(next / step) * step;
-      onChange(next);
-    };
+    beginDrag(e.clientY);
+    const move = (ev: MouseEvent) => applyDrag(ev.clientY);
     const up = () => {
       setDrag(false);
+      onActiveChange?.(false);
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
     };
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    beginDrag(e.touches[0].clientY);
+    const move = (ev: TouchEvent) => {
+      ev.preventDefault();
+      applyDrag(ev.touches[0].clientY);
+    };
+    const end = () => {
+      setDrag(false);
+      onActiveChange?.(false);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", end);
+      window.removeEventListener("touchcancel", end);
+    };
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", end);
+    window.addEventListener("touchcancel", end);
   }
 
   function onWheel(e: React.WheelEvent) {
@@ -317,7 +345,9 @@ function Knob({
   return (
     <div
       className="flex flex-col items-center gap-1.5 select-none cursor-ns-resize relative"
+      style={{ touchAction: "none" }}
       onMouseDown={onDown}
+      onTouchStart={onTouchStart}
       onWheel={onWheel}
       data-knob={dataKey}
     >
@@ -804,6 +834,18 @@ function LfoViz({
   return <canvas ref={ref} className="block w-full h-full" />;
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isMobile;
+}
+
 interface KeyDef {
   note: string;
   type: "white" | "black";
@@ -851,7 +893,10 @@ function PianoKeyboard({
   onUp: (n: string) => void;
   octave: number;
 }) {
-  const keys = useMemo(() => buildKeys(octave - 1, 3), [octave]);
+  const isMobile = useIsMobile();
+  const octaves = isMobile ? 1 : 3;
+  const startOct = isMobile ? octave : octave - 1;
+  const keys = useMemo(() => buildKeys(startOct, octaves), [startOct, octaves]);
   const whiteCount = keys.filter((k) => k.type === "white").length;
   const containerRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(1000);
@@ -881,7 +926,7 @@ function PianoKeyboard({
     <div
       ref={containerRef}
       className="relative select-none"
-      style={{ height: wH }}
+      style={{ height: wH, touchAction: "none" }}
     >
       {keys.map((k) => {
         const isDown = down.has(k.note);
@@ -908,9 +953,10 @@ function PianoKeyboard({
               ...peerStyle,
             }}
             data-note={k.note}
-            onMouseDown={() => onDown(k.note)}
-            onMouseUp={() => onUp(k.note)}
-            onMouseLeave={() => onUp(k.note)}
+            onPointerDown={() => onDown(k.note)}
+            onPointerUp={() => onUp(k.note)}
+            onPointerLeave={() => onUp(k.note)}
+            onPointerCancel={() => onUp(k.note)}
           >
             {k.type === "white" && (
               <span className="absolute bottom-2 left-0 right-0 text-center text-[9px] text-ink-4 tracking-[0.04em] pointer-events-none">
@@ -940,10 +986,14 @@ export function SynthInner({
   params,
   setParams,
   peerDown = {},
+  onKnobActivity,
+  onNoteActivity,
 }: {
   params: SynthParams;
   setParams: React.Dispatch<React.SetStateAction<SynthParams>>;
   peerDown?: Record<string, { id: string; name: string; color: string }>;
+  onKnobActivity?: (label: string | null) => void;
+  onNoteActivity?: (note: string, active: boolean) => void;
 }) {
   const ctxRef = useRef<AudioContext | null>(null);
   const filterRef = useRef<BiquadFilterNode | null>(null);
@@ -1021,72 +1071,80 @@ export function SynthInner({
       lfoGain.connect(filter.frequency);
   }, []);
 
-  const noteOn = useCallback((note: string) => {
-    if (voicesRef.current.has(note)) return;
-    const p = paramsRef.current,
-      ctx = ctxRef.current;
-    if (!ctx || !filterRef.current) return;
-    const midi = noteNameToMidi(note);
-    if (midi < 0) return;
-    const now = ctx.currentTime,
-      freq = midiToFreq(midi);
-    const osc = ctx.createOscillator();
-    osc.type = p.waveform;
-    osc.frequency.value = freq;
-    if (p.lfoTarget === "pitch" && lfoGainRef.current)
-      lfoGainRef.current.connect(osc.detune);
-    const ampEnv = ctx.createGain();
-    const a = Math.max(p.ampA, 0.001),
-      d = Math.max(p.ampD, 0.001);
-    ampEnv.gain.setValueAtTime(0, now);
-    ampEnv.gain.linearRampToValueAtTime(1, now + a);
-    ampEnv.gain.linearRampToValueAtTime(p.ampS, now + a + d);
-    osc.connect(ampEnv);
-    ampEnv.connect(filterRef.current);
-    osc.start(now);
-    const base = p.filterCutoff,
-      fa = Math.max(p.filtA, 0.001),
-      fd = Math.max(p.filtD, 0.001);
-    filterRef.current.frequency.cancelScheduledValues(now);
-    filterRef.current.frequency.setValueAtTime(base, now);
-    filterRef.current.frequency.linearRampToValueAtTime(
-      base + p.filtEnvAmt,
-      now + fa,
-    );
-    filterRef.current.frequency.linearRampToValueAtTime(
-      base + p.filtEnvAmt * p.filtS,
-      now + fa + fd,
-    );
-    voicesRef.current.set(note, { osc, ampEnv });
-    envTriggerRef.current = { on: performance.now(), off: 0 };
-  }, []);
-
-  const noteOff = useCallback((note: string) => {
-    const voice = voicesRef.current.get(note),
-      ctx = ctxRef.current;
-    if (!voice || !ctx) return;
-    const p = paramsRef.current,
-      now = ctx.currentTime;
-    const ar = Math.max(p.ampR, 0.001),
-      fr = Math.max(p.filtR, 0.001);
-    voice.ampEnv.gain.cancelScheduledValues(now);
-    voice.ampEnv.gain.setValueAtTime(voice.ampEnv.gain.value, now);
-    voice.ampEnv.gain.linearRampToValueAtTime(0, now + ar);
-    voice.osc.stop(now + ar + 0.01);
-    if (filterRef.current) {
+  const noteOn = useCallback(
+    (note: string) => {
+      if (voicesRef.current.has(note)) return;
+      const p = paramsRef.current,
+        ctx = ctxRef.current;
+      if (!ctx || !filterRef.current) return;
+      const midi = noteNameToMidi(note);
+      if (midi < 0) return;
+      const now = ctx.currentTime,
+        freq = midiToFreq(midi);
+      const osc = ctx.createOscillator();
+      osc.type = p.waveform;
+      osc.frequency.value = freq;
+      if (p.lfoTarget === "pitch" && lfoGainRef.current)
+        lfoGainRef.current.connect(osc.detune);
+      const ampEnv = ctx.createGain();
+      const a = Math.max(p.ampA, 0.001),
+        d = Math.max(p.ampD, 0.001);
+      ampEnv.gain.setValueAtTime(0, now);
+      ampEnv.gain.linearRampToValueAtTime(1, now + a);
+      ampEnv.gain.linearRampToValueAtTime(p.ampS, now + a + d);
+      osc.connect(ampEnv);
+      ampEnv.connect(filterRef.current);
+      osc.start(now);
+      const base = p.filterCutoff,
+        fa = Math.max(p.filtA, 0.001),
+        fd = Math.max(p.filtD, 0.001);
       filterRef.current.frequency.cancelScheduledValues(now);
-      filterRef.current.frequency.setValueAtTime(
-        filterRef.current.frequency.value,
-        now,
+      filterRef.current.frequency.setValueAtTime(base, now);
+      filterRef.current.frequency.linearRampToValueAtTime(
+        base + p.filtEnvAmt,
+        now + fa,
       );
       filterRef.current.frequency.linearRampToValueAtTime(
-        p.filterCutoff,
-        now + fr,
+        base + p.filtEnvAmt * p.filtS,
+        now + fa + fd,
       );
-    }
-    voicesRef.current.delete(note);
-    envTriggerRef.current.off = performance.now();
-  }, []);
+      voicesRef.current.set(note, { osc, ampEnv });
+      envTriggerRef.current = { on: performance.now(), off: 0 };
+      onNoteActivity?.(note, true);
+    },
+    [onNoteActivity],
+  );
+
+  const noteOff = useCallback(
+    (note: string) => {
+      const voice = voicesRef.current.get(note),
+        ctx = ctxRef.current;
+      if (!voice || !ctx) return;
+      const p = paramsRef.current,
+        now = ctx.currentTime;
+      const ar = Math.max(p.ampR, 0.001),
+        fr = Math.max(p.filtR, 0.001);
+      voice.ampEnv.gain.cancelScheduledValues(now);
+      voice.ampEnv.gain.setValueAtTime(voice.ampEnv.gain.value, now);
+      voice.ampEnv.gain.linearRampToValueAtTime(0, now + ar);
+      voice.osc.stop(now + ar + 0.01);
+      if (filterRef.current) {
+        filterRef.current.frequency.cancelScheduledValues(now);
+        filterRef.current.frequency.setValueAtTime(
+          filterRef.current.frequency.value,
+          now,
+        );
+        filterRef.current.frequency.linearRampToValueAtTime(
+          p.filterCutoff,
+          now + fr,
+        );
+      }
+      voicesRef.current.delete(note);
+      envTriggerRef.current.off = performance.now();
+      onNoteActivity?.(note, false);
+    },
+    [onNoteActivity],
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1344,6 +1402,7 @@ export function SynthInner({
               onChange={set("volume") as (v: number) => void}
               color={C_OSC}
               display={(v) => `${fmt(v * 100, 0)} %`}
+              onActiveChange={(a) => onKnobActivity?.(a ? "Osc Level" : null)}
             />
           </div>
         </Panel>
@@ -1379,6 +1438,9 @@ export function SynthInner({
               onChange={set("filterCutoff") as (v: number) => void}
               color={C_FLT}
               display={(v) => `${fmt(v, 0)} Hz`}
+              onActiveChange={(a) =>
+                onKnobActivity?.(a ? "Filter Cutoff" : null)
+              }
             />
             <Knob
               label="Reso"
@@ -1389,6 +1451,7 @@ export function SynthInner({
               onChange={set("filterRes") as (v: number) => void}
               color={C_FLT}
               display={(v) => fmt(v, 1)}
+              onActiveChange={(a) => onKnobActivity?.(a ? "Filter Reso" : null)}
             />
             <Knob
               label="Env Amt"
@@ -1399,6 +1462,9 @@ export function SynthInner({
               onChange={set("filtEnvAmt") as (v: number) => void}
               color={C_FLT}
               display={(v) => `${fmt(v, 0)} Hz`}
+              onActiveChange={(a) =>
+                onKnobActivity?.(a ? "Filter Env Amt" : null)
+              }
             />
           </div>
         </Panel>
@@ -1440,6 +1506,7 @@ export function SynthInner({
               onChange={set("ampA") as (v: number) => void}
               color={C_AMP}
               display={(v) => `${fmt(v * 1000, 0)} ms`}
+              onActiveChange={(a) => onKnobActivity?.(a ? "Amp Attack" : null)}
             />
             <Knob
               label="Decay"
@@ -1450,6 +1517,7 @@ export function SynthInner({
               onChange={set("ampD") as (v: number) => void}
               color={C_AMP}
               display={(v) => `${fmt(v * 1000, 0)} ms`}
+              onActiveChange={(a) => onKnobActivity?.(a ? "Amp Decay" : null)}
             />
             <Knob
               label="Sustain"
@@ -1460,6 +1528,7 @@ export function SynthInner({
               onChange={set("ampS") as (v: number) => void}
               color={C_AMP}
               display={(v) => `${fmt(v * 100, 0)} %`}
+              onActiveChange={(a) => onKnobActivity?.(a ? "Amp Sustain" : null)}
             />
             <Knob
               label="Release"
@@ -1470,6 +1539,7 @@ export function SynthInner({
               onChange={set("ampR") as (v: number) => void}
               color={C_AMP}
               display={(v) => `${fmt(v * 1000, 0)} ms`}
+              onActiveChange={(a) => onKnobActivity?.(a ? "Amp Release" : null)}
             />
           </div>
         </Panel>
@@ -1511,6 +1581,9 @@ export function SynthInner({
               onChange={set("filtA") as (v: number) => void}
               color={C_ENV}
               display={(v) => `${fmt(v * 1000, 0)} ms`}
+              onActiveChange={(a) =>
+                onKnobActivity?.(a ? "Filter Env Attack" : null)
+              }
             />
             <Knob
               label="Decay"
@@ -1521,6 +1594,9 @@ export function SynthInner({
               onChange={set("filtD") as (v: number) => void}
               color={C_ENV}
               display={(v) => `${fmt(v * 1000, 0)} ms`}
+              onActiveChange={(a) =>
+                onKnobActivity?.(a ? "Filter Env Decay" : null)
+              }
             />
             <Knob
               label="Sustain"
@@ -1531,6 +1607,9 @@ export function SynthInner({
               onChange={set("filtS") as (v: number) => void}
               color={C_ENV}
               display={(v) => `${fmt(v * 100, 0)} %`}
+              onActiveChange={(a) =>
+                onKnobActivity?.(a ? "Filter Env Sustain" : null)
+              }
             />
             <Knob
               label="Release"
@@ -1541,6 +1620,9 @@ export function SynthInner({
               onChange={set("filtR") as (v: number) => void}
               color={C_ENV}
               display={(v) => `${fmt(v * 1000, 0)} ms`}
+              onActiveChange={(a) =>
+                onKnobActivity?.(a ? "Filter Env Release" : null)
+              }
             />
           </div>
         </Panel>
@@ -1609,6 +1691,7 @@ export function SynthInner({
               onChange={set("lfoRate") as (v: number) => void}
               color={C_LFO}
               display={(v) => `${fmt(v, 2)} Hz`}
+              onActiveChange={(a) => onKnobActivity?.(a ? "LFO Rate" : null)}
             />
             <Knob
               label="Depth"
@@ -1619,6 +1702,7 @@ export function SynthInner({
               onChange={set("lfoDepth") as (v: number) => void}
               color={C_LFO}
               display={(v) => `${fmt(v, 0)}`}
+              onActiveChange={(a) => onKnobActivity?.(a ? "LFO Depth" : null)}
             />
           </div>
         </Panel>
@@ -1631,9 +1715,38 @@ export function SynthInner({
           index="06 / KBD"
           color="#fff"
           right={
-            <span className="text-[10px] tracking-[0.14em] uppercase text-ink-3">
-              OCT {params.octave} · Z↓ X↑
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] tracking-[0.14em] uppercase text-ink-3">
+                OCT {params.octave}
+                <span className="hidden md:inline"> · Z↓ X↑</span>
+              </span>
+              <div className="flex gap-1 md:hidden">
+                <button
+                  className="border border-hair rounded bg-panel-2 text-ink-3 px-2 py-1 font-mono text-[10px] leading-none cursor-pointer"
+                  onClick={() =>
+                    setParams((p) => ({
+                      ...p,
+                      octave: Math.max(0, p.octave - 1),
+                    }))
+                  }
+                  aria-label="Octave down"
+                >
+                  −
+                </button>
+                <button
+                  className="border border-hair rounded bg-panel-2 text-ink-3 px-2 py-1 font-mono text-[10px] leading-none cursor-pointer"
+                  onClick={() =>
+                    setParams((p) => ({
+                      ...p,
+                      octave: Math.min(8, p.octave + 1),
+                    }))
+                  }
+                  aria-label="Octave up"
+                >
+                  +
+                </button>
+              </div>
+            </div>
           }
         >
           <div className="p-3">
@@ -1657,8 +1770,11 @@ export function SynthInner({
               }}
             />
             <div className="flex justify-between mt-2.5 text-ink-3 text-[10px] tracking-[0.14em] uppercase">
-              <span>Hold key · sustain note</span>
-              <span>A–K white · W E T Y U sharps</span>
+              <span className="md:hidden">Tap · hold to sustain</span>
+              <span className="hidden md:inline">Hold key · sustain note</span>
+              <span className="hidden md:inline">
+                A–K white · W E T Y U sharps
+              </span>
             </div>
           </div>
         </Panel>
