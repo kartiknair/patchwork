@@ -1045,6 +1045,16 @@ export function SynthInner({
   }, [params.lfoTarget]);
 
   const initAudio = useCallback(() => {
+    const nav = navigator as Navigator & {
+      audioSession?: { type: string };
+    };
+    if (nav.audioSession) {
+      try {
+        nav.audioSession.type = "playback";
+      } catch {
+        /* unsupported */
+      }
+    }
     if (ctxRef.current) {
       if (ctxRef.current.state === "suspended") ctxRef.current.resume();
       return;
