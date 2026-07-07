@@ -1045,7 +1045,10 @@ export function SynthInner({
   }, [params.lfoTarget]);
 
   const initAudio = useCallback(() => {
-    if (ctxRef.current) return;
+    if (ctxRef.current) {
+      if (ctxRef.current.state === "suspended") ctxRef.current.resume();
+      return;
+    }
     const ctx = new AudioContext();
     ctxRef.current = ctx;
     const filter = ctx.createBiquadFilter();
@@ -1069,6 +1072,7 @@ export function SynthInner({
     lfo.start();
     if (paramsRef.current.lfoTarget === "filter")
       lfoGain.connect(filter.frequency);
+    if (ctx.state === "suspended") ctx.resume();
   }, []);
 
   const noteOn = useCallback(
